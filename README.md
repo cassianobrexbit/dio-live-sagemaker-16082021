@@ -2,6 +2,7 @@
 Repositório de códigos para o Live Coding de 16/08/2021  - AWS Sagemaker
 
 ## Passo 1 - Crie uma instância de notebook Amazon SageMaker para preparação de dados
+Nesta etapa, você cria a instância do notebook que usa para baixar e processar seus dados. Como parte do processo de criação, você também cria uma função de gerenciamento de identidade e acesso (IAM) que permite ao Amazon SageMaker acessar dados no Amazon S3.
 
 - Faça login no console do Amazon SageMaker e, no canto superior direito, selecione sua região AWS preferida. Este tutorial usa a região US West (Oregon).
 - No painel de navegação esquerdo, escolha ```Notebook instances```, e ```Create notebook instance```.
@@ -16,6 +17,7 @@ Observação: se você já tem um bucket que gostaria de usar, escolha ```Specif
 In the ```Notebook instances section```, a nova isntância do Notebook será mostrada no status de ```Pending```. O Notabook estará disponível quando o status mudar para  ``` InService```. 
 
 ## Passo 2 - Preparar os dados
+Nesta etapa, você usa sua instância de notebook do Amazon SageMaker para pré-processar os dados de que precisa para treinar seu modelo de aprendizado de máquina e, em seguida, fazer upload dos dados para o Amazon S3.
 
  - Depois da sua instância do Notebook mudar o status para ```InService``` selecion ```Open Jupyter```
  - Em ```Jupyter``` selecione ```New``` e escolha ```conda_python3```
@@ -75,7 +77,8 @@ except Exception as e:
 train_data, test_data = np.split(model_data.sample(frac=1, random_state=1729), [int(0.7 * len(model_data))])
 print(train_data.shape, test_data.shape)
  ```
- ## Passo 3 - Treinar o modelo de ML 
+ ## Passo 3 - Treinar o modelo de ML
+ Nesta etapa, você usa seu conjunto de dados de treinamento para treinar seu modelo de aprendizado de máquina.
  
  - Em uma nova célula de código em seu Notebook Jupyter, copie e cole o código a seguir e escolha Executar. Este código reformata o cabeçalho e a primeira coluna dos dados de treinamento e, em seguida, carrega os dados do bucket S3. Esta etapa é necessária para usar o algoritmo XGBoost pré-construído do Amazon SageMaker.
 
@@ -95,4 +98,36 @@ xgb.set_hyperparameters(max_depth=5,eta=0.2,gamma=4,min_child_weight=6,subsample
 
 ```
 xgb.fit({'train': s3_input_train})
+```
+
+## Passo 4 - Publicar o modelo de ML
+Nesta etapa, você implanta o modelo treinado em um endpoint, reformata e carrega os dados CSV e, em seguida, executa o modelo para criar previsões.
+
+- Em uma nova célula de código do Notebook Jupyter, copie e cole o código a seguir e escolha ```Run```. Este código implanta o modelo em um servidor e cria um endpoint SageMaker para acessi. Esta etapa pode levar alguns minutos para ser concluída.
+```
+xgb_predictor = xgb.deploy(initial_instance_count=1,instance_type='ml.m4.xlarge')
+```
+- Para realizar a predição dos clientes que irão aderir ao produto do banco ou não na amostra de testes, copie e cole o seguinte código em uma nova célula ```Run```
+```
+from sagemaker.serializers import CSVSerializer
+
+test_data_array = test_data.drop(['y_no', 'y_yes'], axis=1).values #load the data into an array
+xgb_predictor.serializer = CSVSerializer() # set the serializer type
+predictions = xgb_predictor.predict(test_data_array).decode('utf-8') # predict!
+predictions_array = np.fromstring(predictions[1:], sep=',') # and turn the prediction into an array
+print(predictions_array.shape)
+```
+
+## Passo 5 - Avaliar a performance do modelo treinado
+
+Em uma nova célula do Notebook Jupyter, copie e cole o seguinte código e selecione ```Run```. Este código compara os valores atuais com os preditos em uma tabela chamada *Matriz de Confusão*
+
+```
+cm = pd.crosstab(index=test_data['y_yes'], columns=np.round(predictions_array), rownames=['Observed'], colnames=['Predicted'])
+tn = cm.iloc[0,0]; fn = cm.iloc[1,0]; tp = cm.iloc[1,1]; fp = cm.iloc[0,1]; p = (tp+tn)/(tp+tn+fp+fn)*100
+print("\n{0:<20}{1:<4.1f}%\n".format("Overall Classification Rate: ", p))
+print("{0:<15}{1:<15}{2:>8}".format("Predicted", "No Purchase", "Purchase"))
+print("Observed")
+print("{0:<15}{1:<2.0f}% ({2:<}){3:>6.0f}% ({4:<})".format("No Purchase", tn/(tn+fn)*100,tn, fp/(tp+fp)*100, fp))
+print("{0:<16}{1:<1.0f}% ({2:<}){3:>7.0f}% ({4:<}) \n".format("Purchase", fn/(tn+fn)*100,fn, tp/(tp+fp)*100, tp))
 ```
