@@ -1,2 +1,98 @@
 # dio-live-sagemaker-16082021
 Repositório de códigos para o Live Coding de 16/08/2021  - AWS Sagemaker
+
+## Passo 1 - Crie uma instância de notebook Amazon SageMaker para preparação de dados
+
+- Faça login no console do Amazon SageMaker e, no canto superior direito, selecione sua região AWS preferida. Este tutorial usa a região US West (Oregon).
+- No painel de navegação esquerdo, escolha ```Notebook instances```, e ```Create notebook instance```.
+- Na página ```Create notebook instance```, na caixa ```Notebook instance setting```, preencha os seguintes campos:
+  - Para ```Notebook instance name```, digite ```SageMaker-DIO-Live```.
+  - Para ```Notebook instance type```, escolha ```ml.t2.medium```.
+  - Para ```Elastic inference```, mantenha a seleção padrão de ```none```.
+- Na seção ```Permissions and encryption```, para  ```IAM role```, escolha ```Create a new role``` e, na caixa de diálogo ```Create an IAM role```, selecione ```Any S3 bucket``` e escolha ```Create role```.
+Observação: se você já tem um bucket que gostaria de usar, escolha ```Specific S3 buckets``` e especifique o nome do bucket.
+- Amazon SageMaker creates the ```AmazonSageMaker-ExecutionRole-***``` role.
+-  Manetnhas as configurações padrão para o restante das opções e selecione ```Create notebook instance```.
+In the ```Notebook instances section```, a nova isntância do Notebook será mostrada no status de ```Pending```. O Notabook estará disponível quando o status mudar para  ``` InService```. 
+
+## Passo 2 - Preparar os dados
+
+ - Depois da sua instância do Notebook mudar o status para ```InService``` selecion ```Open Jupyter```
+ - Em ```Jupyter``` selecione ```New``` e escolha ```conda_python3```
+ - Em uma nova célula de código no Jupyter Notebook, copie e cole o seguinte código e selecione ```Run```
+ ```
+ # import libraries
+import boto3, re, sys, math, json, os, sagemaker, urllib.request
+from sagemaker import get_execution_role
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+from IPython.display import Image
+from IPython.display import display
+from time import gmtime, strftime
+from sagemaker.predictor import csv_serializer
+
+# Define IAM role
+role = get_execution_role()
+prefix = 'sagemaker/DEMO-xgboost-dm'
+my_region = boto3.session.Session().region_name # set the region of the instance
+
+# this line automatically looks for the XGBoost image URI and builds an XGBoost container.
+xgboost_container = sagemaker.image_uris.retrieve("xgboost", my_region, "latest")
+
+print("Success - the MySageMakerInstance is in the " + my_region + " region. You will use the " + xgboost_container + " container for your SageMaker endpoint.")
+ ```
+- Crie o bucket S3 para armazenar eus dados. Copie e cole o código a seguir em uma nova célula de código, altere o nome do bucket e selecione ```Run```
+```
+bucket_name = 'your-s3-bucket-name' # <--- CHANGE THIS VARIABLE TO A UNIQUE NAME FOR YOUR BUCKET
+s3 = boto3.resource('s3')
+try:
+    if  my_region == 'us-east-1':
+      s3.create_bucket(Bucket=bucket_name)
+    else: 
+      s3.create_bucket(Bucket=bucket_name, CreateBucketConfiguration={ 'LocationConstraint': my_region })
+    print('S3 bucket created successfully')
+except Exception as e:
+    print('S3 error: ',e)
+ ```
+- Faça o donwload dos dados para a sua instância do SageMaker e carregue os dados em um dataframe. Copie e cole o seguinte código em uma nova célula de código e clique em ```Run```
+```
+try:
+  urllib.request.urlretrieve ("https://d1.awsstatic.com/tmt/build-train-deploy-machine-learning-model-sagemaker/bank_clean.27f01fbbdf43271788427f3682996ae29ceca05d.csv", "bank_clean.csv")
+  print('Success: downloaded bank_clean.csv.')
+except Exception as e:
+  print('Data load error: ',e)
+
+try:
+  model_data = pd.read_csv('./bank_clean.csv',index_col=0)
+  print('Success: Data loaded into dataframe.')
+except Exception as e:
+    print('Data load error: ',e)
+ ```
+ - Misture e divida os dados em dados de treinamento e dados de teste. Copie e cole o código a seguir na próxima célula de código e escolha Executar. Os dados de treinamento (70% dos clientes) são usados durante o loop de treinamento do modelo. Use a otimização baseada em gradiente para refinar iterativamente os parâmetros do modelo. A otimização baseada em gradiente é uma maneira de encontrar os valores dos parâmetros do modelo que minimizam o erro do modelo, usando o gradiente da função de perda do modelo. Os dados de teste (restantes 30% dos clientes) são usados para avaliar o desempenho do modelo e medir quão bem o modelo treinado generaliza para dados invisíveis.
+
+ ```
+train_data, test_data = np.split(model_data.sample(frac=1, random_state=1729), [int(0.7 * len(model_data))])
+print(train_data.shape, test_data.shape)
+ ```
+ ## Passo 3 - Treinar o modelo de ML 
+ 
+ - Em uma nova célula de código em seu Notebook Jupyter, copie e cole o código a seguir e escolha Executar. Este código reformata o cabeçalho e a primeira coluna dos dados de treinamento e, em seguida, carrega os dados do bucket S3. Esta etapa é necessária para usar o algoritmo XGBoost pré-construído do Amazon SageMaker.
+
+```
+pd.concat([train_data['y_yes'], train_data.drop(['y_no', 'y_yes'], axis=1)], axis=1).to_csv('train.csv', index=False, header=False)
+boto3.Session().resource('s3').Bucket(bucket_name).Object(os.path.join(prefix, 'train/train.csv')).upload_file('train.csv')
+s3_input_train = sagemaker.inputs.TrainingInput(s3_data='s3://{}/{}/train'.format(bucket_name, prefix), content_type='csv')
+```
+
+- Configure a sessão do Amazon SageMaker, crie uma instância do modelo XGBoost (um estimador) e defina os hiperparâmetros do modelo. Copie e cole o seguinte código na próxima célula de código e escolha ```Run```
+```
+sess = sagemaker.Session()
+xgb = sagemaker.estimator.Estimator(xgboost_container,role, instance_count=1, instance_type='ml.m4.xlarge',output_path='s3://{}/{}/output'.format(bucket_name, prefix),sagemaker_session=sess)
+xgb.set_hyperparameters(max_depth=5,eta=0.2,gamma=4,min_child_weight=6,subsample=0.8,silent=0,objective='binary:logistic',num_round=100)
+```
+- Comece o trabalho de treinamento. Copie e cole o código a seguir na próxima célula de código e escolha Executar. Este código treina o modelo usando a otimização de gradiente em uma instância ml.m4.xlarge. Depois de alguns minutos, você deve ver os registros de treinamento sendo gerados em seu Notebook Jupyter.
+
+```
+xgb.fit({'train': s3_input_train})
+```
