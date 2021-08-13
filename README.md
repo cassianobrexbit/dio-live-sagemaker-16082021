@@ -120,7 +120,7 @@ print(predictions_array.shape)
 
 ## Passo 5 - Avaliar a performance do modelo treinado
 
-Em uma nova célula do Notebook Jupyter, copie e cole o seguinte código e selecione ```Run```. Este código compara os valores atuais com os preditos em uma tabela chamada *Matriz de Confusão*
+Em uma nova célula do Notebook Jupyter, copie e cole o seguinte código e selecione ```Run```. Este código compara os valores atuais com os preditos em uma tabela chamada *Matriz de Confusão*. Baseado na predição, pode-se concluir que um cliente irá se inscrever para um certificado de depósito com acurácia de 90% para os clientes dos dados de teste, uma precisão de 65% para os que irão se inscrever e 90% para os que não irão se inscrever.
 
 ```
 cm = pd.crosstab(index=test_data['y_yes'], columns=np.round(predictions_array), rownames=['Observed'], colnames=['Predicted'])
@@ -131,3 +131,22 @@ print("Observed")
 print("{0:<15}{1:<2.0f}% ({2:<}){3:>6.0f}% ({4:<})".format("No Purchase", tn/(tn+fn)*100,tn, fp/(tp+fp)*100, fp))
 print("{0:<16}{1:<1.0f}% ({2:<}){3:>7.0f}% ({4:<}) \n".format("Purchase", fn/(tn+fn)*100,fn, tp/(tp+fp)*100, tp))
 ```
+
+## Passo 6 - Limpar os recursos
+Neste passo você irá limpar o ambiente com os recursos
+Importante: Encerrar recursos que não estão sendo usados ativamente reduz custos e é uma prática recomendada. Não encerrar seus recursos resultará em cobranças em sua conta.
+ - Deletar o seu endpoind: No seu Notebook Jupyter, copie e cole o seguinte código e escolhe ```Run```
+ ```
+ xgb_predictor.delete_endpoint(delete_endpoint_config=True)
+ ```
+ - Deletar os artefatos de treino e o bucket S3: No seu Notebook Jupyter, copie e cole o seguinte código e selecione ```Run```
+ ```
+bucket_to_delete = boto3.resource('s3').Bucket(bucket_name)
+bucket_to_delete.objects.all().delete()
+ ```
+- Excluir o seu SageMaker Notebook: Parar e excluir o seu SageMaker Notebook
+  - Abrir o ```SageMaker Console```
+  - Em ```Notebook``` escolha ```Notebook instances```
+  - Selecione a instância do Notebook criada, selecione ```Actions``` e ```Stop```. Este procedimento pode levar alguns minutos, e quando o status mudar para ```Stopped```, vá para o passo seguinte
+  - Selecione ```Actions``` e depois ```Delete```
+  - Selecione ```Delete```
