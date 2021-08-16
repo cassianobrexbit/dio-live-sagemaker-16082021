@@ -14,7 +14,7 @@ Nesta etapa, você cria a instância do notebook que usa para baixar e processar
 Observação: se você já tem um bucket que gostaria de usar, escolha ```Specific S3 buckets``` e especifique o nome do bucket.
 - Amazon SageMaker creates the ```AmazonSageMaker-ExecutionRole-***``` role.
 -  Mantenha as configurações padrão para o restante das opções e selecione ```Create notebook instance```.
-In the ```Notebook instances section```, a nova isntância do Notebook será mostrada no status de ```Pending```. O Notabook estará disponível quando o status mudar para  ``` InService```. 
+Em ```Notebook instances section```, a nova instância do Notebook será mostrada no status de ```Pending```. O Notebook estará disponível quando o status mudar para  ``` InService```. 
 
 ## Passo 2 - Preparar os dados
 Nesta etapa, você usa sua instância de notebook do Amazon SageMaker para pré-processar os dados de que precisa para treinar seu modelo de aprendizado de máquina e, em seguida, fazer upload dos dados para o Amazon S3.
