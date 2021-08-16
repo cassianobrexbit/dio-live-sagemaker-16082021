@@ -13,7 +13,7 @@ Nesta etapa, você cria a instância do notebook que usa para baixar e processar
 - Na seção ```Permissions and encryption```, para  ```IAM role```, escolha ```Create a new role``` e, na caixa de diálogo ```Create an IAM role```, selecione ```Any S3 bucket``` e escolha ```Create role```.
 Observação: se você já tem um bucket que gostaria de usar, escolha ```Specific S3 buckets``` e especifique o nome do bucket.
 - Amazon SageMaker creates the ```AmazonSageMaker-ExecutionRole-***``` role.
--  Manetnhas as configurações padrão para o restante das opções e selecione ```Create notebook instance```.
+-  Mantenha as configurações padrão para o restante das opções e selecione ```Create notebook instance```.
 In the ```Notebook instances section```, a nova isntância do Notebook será mostrada no status de ```Pending```. O Notabook estará disponível quando o status mudar para  ``` InService```. 
 
 ## Passo 2 - Preparar os dados
